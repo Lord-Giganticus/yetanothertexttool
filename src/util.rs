@@ -30,8 +30,18 @@ impl INF1 {
     }
 }
 
+impl INF1Entry {
+    pub fn get_info(&self) -> String  {
+        let messagetype = self.messagetype;
+        let messageboxtype = self.messageboxtype;
+        let soundid = SoundId::as_string(self.soundid);
+        let camtype = self.camtype;
+        format!("[type:{messagetype:?}][boxtype:{messageboxtype:?}][sound:{soundid}][cam:{camtype:?}]")
+    }
+}
+
 impl DAT1 {
-    pub fn create_event_text(&self, data: &[u8], string: &mut Vec<u16>, position: usize) -> usize {
+    pub(self) fn create_event_text(&self, data: &[u8], string: &mut Vec<u16>, position: usize) -> usize {
         let entrysize = data[position] as usize - 1;
         let entrytype = data[position + 1];
         let entryvalue = &data[(position+2)..(position+4)];
@@ -136,3 +146,4 @@ impl DAT1 {
         position + entrysize
     }
 }
+

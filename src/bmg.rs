@@ -1,4 +1,5 @@
 use std::io::SeekFrom;
+use std::io::*;
 use binrw::prelude::*;
 use binrw::Endian;
 
@@ -57,13 +58,57 @@ impl SectionHeader {
 }
 
 #[derive(Debug, Default, Clone, Copy, BinRead, BinWrite)]
+#[brw(repr = u8)]
+pub enum MessageType {
+    #[default]
+    Talk,
+    Shout,
+    Auto,
+    Crash,
+    Empty
+}
+
+#[derive(Debug, Default, Clone, Copy, BinWrite)]
+#[brw(repr = u8)]
+pub enum MessageBoxType {
+    #[default]
+    Normal,
+    SignBoard = 4,
+}
+
+impl BinRead for MessageBoxType {
+    type Args<'a> = ();
+    fn read_options<R: Read + Seek>(
+            reader: &mut R,
+            _: Endian,
+            _: Self::Args<'_>,
+        ) -> BinResult<Self> {
+        let byte = <u8>::read_ne(reader)?;
+        match byte {
+            0 => Ok(Self::Normal),
+            4 => Ok(Self::SignBoard),
+            _ => Ok(Self::Normal)
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, BinRead, BinWrite)]
+#[brw(repr = u8)]
+pub enum CameraType {
+    #[default]
+    Normal,
+    CameraId,
+    NoCam
+}
+
+#[derive(Debug, Default, Clone, Copy, BinRead, BinWrite)]
 pub struct INF1Entry {
     pub textaddress: u32,
     pub cameraid: u16,
     pub soundid: u8,
-    pub camtype: u8,
-    pub messagetype: u8,
-    pub messageboxtype: u8,
+    pub camtype: CameraType,
+    pub messagetype: MessageType,
+    pub messageboxtype: MessageBoxType,
     pub messageareaid: u8,
     pub padding: u8
 }
@@ -71,7 +116,7 @@ pub struct INF1Entry {
 #[derive(Debug, Clone, Default, BinRead, BinWrite)]
 pub struct INF1 {
     pub entrynum: u16,
-    pub entrysize: u16,
+    pub entrysize: u16, // 0x12
     pub padding: u32,
     #[br(count = entrynum as usize)]
     pub entries: Vec<INF1Entry>

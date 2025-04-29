@@ -14,6 +14,8 @@ fn main() -> BinResult<()> {
     let inf1 = bmg.get_inf1().unwrap();
     let dat1 = bmg.get_dat1().unwrap();
     for i in 0..inf1.entries.len() {
+        let entry = inf1.entries[i];
+        println!("{}", entry.get_info());
         let message = inf1.get_string(i, dat1);
         println!("{}", message);
     }
