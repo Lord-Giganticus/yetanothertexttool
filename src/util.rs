@@ -44,42 +44,7 @@ impl INF1Entry {
         let first = &dat1.data[addr..(addr+2)];
         first != &[0, 0]
     }
-    pub fn has_flow(&self, id: u16, flw1: &FLW1) -> bool {
-        'outer: for i in 0..flw1.nodenum {
-            let flow = flw1.entries[i as usize];
-            if let FLW1Entry::Text(text) = flow {
-                if id == text.textid {
-                    for c in 0..flw1.nodenum {
-                        if c != i {
-                            let cflow = flw1.entries[c as usize];
-                            match cflow {
-                                FLW1Entry::Text(t) => {
-                                    if t.nexttextid == i {
-                                        continue 'outer;
-                                    }
-                                }
-                                FLW1Entry::Condition(con) => {
-                                    let branch = flw1.branch_nodes[con.branchnodeid as usize];
-                                    let next_branch = flw1.branch_nodes[con.branchnodeid as usize + 1];
-                                    if branch == i || next_branch == i {
-                                        continue 'outer;
-                                    }
-                                },
-                                FLW1Entry::Event(eve) => {
-                                    let branch = flw1.branch_nodes[eve.branchnodeid as usize];
-                                    if branch == i {
-                                        continue 'outer;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    return true;
-                }
-            }
-        }
-        false
-    }
+    
 }
 
 impl DAT1 {
@@ -278,6 +243,42 @@ impl EntryEvent {
 }
 
 impl FLW1 {
+    pub fn has_flow(&self, id: u16) -> bool {
+        'outer: for i in 0..self.nodenum {
+            let flow = self.entries[i as usize];
+            if let FLW1Entry::Text(text) = flow {
+                if id == text.textid {
+                    for c in 0..self.nodenum {
+                        if c != i {
+                            let cflow = self.entries[c as usize];
+                            match cflow {
+                                FLW1Entry::Text(t) => {
+                                    if t.nexttextid == i {
+                                        continue 'outer;
+                                    }
+                                }
+                                FLW1Entry::Condition(con) => {
+                                    let branch = self.branch_nodes[con.branchnodeid as usize];
+                                    let next_branch = self.branch_nodes[con.branchnodeid as usize + 1];
+                                    if branch == i || next_branch == i {
+                                        continue 'outer;
+                                    }
+                                },
+                                FLW1Entry::Event(eve) => {
+                                    let branch = self.branch_nodes[eve.branchnodeid as usize];
+                                    if branch == i {
+                                        continue 'outer;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+        false
+    }
     pub fn findnode(&self, id: u16, converted: &mut Vec<bool>) -> Result<String, std::fmt::Error> {
         let mut result = String::new();
         for i in 0..self.nodenum {

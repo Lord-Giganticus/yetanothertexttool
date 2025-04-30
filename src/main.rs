@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if entry.has_text(dat1) {
             println!("{}", inf1.get_string(i, dat1))
         }
-        if entry.has_flow(i as u16, flw1) {
+        if flw1.has_flow(i as u16) {
             let txt = flw1.findnode(i as u16, &mut converted)?;
             if !txt.is_empty() {
                 println!("[beginflow]\n{txt}[endflow]")
