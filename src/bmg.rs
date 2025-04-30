@@ -69,11 +69,12 @@ pub enum MessageType {
 }
 
 #[derive(Debug, Default, Clone, Copy, BinWrite)]
-#[brw(repr = u8)]
+#[bw(repr = i8)]
 pub enum MessageBoxType {
     #[default]
     Normal,
     SignBoard = 4,
+    Unknown = -1
 }
 
 impl BinRead for MessageBoxType {
@@ -87,7 +88,7 @@ impl BinRead for MessageBoxType {
         match byte {
             0 => Ok(Self::Normal),
             4 => Ok(Self::SignBoard),
-            _ => Ok(Self::Normal)
+            _ => Ok(Self::Unknown)
         }
     }
 }
@@ -220,19 +221,24 @@ pub struct FLW1 {
     pub nodenum: u16,
     pub branchnodenum: u16,
     pub padding: u32,
-    pub entries: Vec<FLW1Entry>
+    pub entries: Vec<FLW1Entry>,
+    pub branch_nodes: Vec<u16>
 }
 
 impl FLW1 {
     pub fn read<R: BinReaderExt>(reader: &mut R, endian: Endian) -> BinResult<Self> {
         let mut result = Self::default();
-        let FLW1 { nodenum, branchnodenum, padding, entries } = &mut result;
+        let FLW1 { nodenum, branchnodenum, padding,
+            entries, branch_nodes } = &mut result;
         *nodenum = reader.read_type(endian)?;
         *branchnodenum = reader.read_type(endian)?;
         *padding = reader.read_type(endian)?;
         entries.reserve_exact(*nodenum as usize);
         for _ in 0..*nodenum {
             entries.push(FLW1Entry::read(reader, endian)?);
+        }
+        for _ in 0..*branchnodenum {
+            branch_nodes.push(reader.read_type(endian)?);
         }
         Ok(result)
     }

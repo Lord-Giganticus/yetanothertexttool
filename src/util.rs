@@ -1,5 +1,6 @@
 use crate::font::*;
 use crate::bmg::*;
+use std::fmt::Write;
 
 
 impl INF1 {
@@ -37,6 +38,47 @@ impl INF1Entry {
         let soundid = SoundId::as_string(self.soundid);
         let camtype = self.camtype;
         format!("[type:{messagetype:?}][boxtype:{messageboxtype:?}][sound:{soundid}][cam:{camtype:?}]")
+    }
+    pub fn has_text(&self, dat1: &DAT1) -> bool {
+        let addr = self.textaddress as usize;
+        let first = &dat1.data[addr..(addr+2)];
+        first != &[0, 0]
+    }
+    pub fn has_flow(&self, id: u16, flw1: &FLW1) -> bool {
+        'outer: for i in 0..flw1.nodenum {
+            let flow = flw1.entries[i as usize];
+            if let FLW1Entry::Text(text) = flow {
+                if id == text.textid {
+                    for c in 0..flw1.nodenum {
+                        if c != i {
+                            let cflow = flw1.entries[c as usize];
+                            match cflow {
+                                FLW1Entry::Text(t) => {
+                                    if t.nexttextid == i {
+                                        continue 'outer;
+                                    }
+                                }
+                                FLW1Entry::Condition(con) => {
+                                    let branch = flw1.branch_nodes[con.branchnodeid as usize];
+                                    let next_branch = flw1.branch_nodes[con.branchnodeid as usize + 1];
+                                    if branch == i || next_branch == i {
+                                        continue 'outer;
+                                    }
+                                },
+                                FLW1Entry::Event(eve) => {
+                                    let branch = flw1.branch_nodes[eve.branchnodeid as usize];
+                                    if branch == i {
+                                        continue 'outer;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
@@ -147,3 +189,173 @@ impl DAT1 {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+#[repr(u16)]
+pub enum MultipleChoice {
+    PenguinRace, 
+    SwimmingSchool, 
+    PenguinRaceAlt, 
+    BombTimeAttackLv1, 
+    PhantomTeresaRacer, 
+    BombTimeAttackLv2, 
+    TrialSurfingCoach, 
+    TrialSurfingHowTo, 
+    DeathPromenadeTeresaRacer, 
+    RosettaFinalBattle, 
+    CometTico, 
+    TransformTico, 
+    ChallengeSurfingCoach, 
+    TicoShopExchange, 
+    TicoShopWhich, 
+    KinopioPurple, 
+    CometTicoTell, 
+    TrialTamakoroHowTo, 
+    KnockOnTheDoor, 
+    LedPattern
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u16)]
+pub enum ConditionType {
+    MultipleChoice,   
+    Coded,    
+    PlayerNearNpc,  
+    SwA,   
+    SwB,   
+    PlayerStateNoPowerUp,    
+    PlayerStateBee, 
+    PlayerStateBoo, 
+    PowerStarSpawned,   
+    AlreadyTalkedScene,  
+    PlayerLuigi,   
+    GetBranchAstroGalaxyResult,   
+    CutsceneActive,    
+    AlreadyTalkedSaved,    
+    IsMsgLedPattern
+}
+
+impl EntryCondition {
+    pub fn get_choice(&self) -> String {
+        if self.arg <= 19 {
+            let choice: MultipleChoice = unsafe{std::mem::transmute(self.arg)};
+            format!("{choice:?}")
+        } else {
+            self.arg.to_string()
+        }
+    }
+    pub fn get_con_type(&self) -> String {
+        if self.conditiontype <= 14 {
+            let con : ConditionType = unsafe {std::mem::transmute(self.conditiontype)};
+            format!("{con:?}")
+        } else {
+            self.conditiontype.to_string()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum EventType {
+    NpcEvent, 
+    NpcEventAlt, 
+    NextText, 
+    Unk, 
+    Emotion, 
+    SwA, 
+    SwB, 
+    Metamorphosis
+}
+
+impl EntryEvent {
+    pub fn get_event_type(&self) -> String {
+        if self.event_type < 7 {
+            let event: EventType = unsafe{std::mem::transmute(self.event_type)};
+            format!("{event:?}")
+        } else {
+            self.event_type.to_string()
+        }
+    }
+}
+
+impl FLW1 {
+    pub fn findnode(&self, id: u16, converted: &mut Vec<bool>) -> Result<String, std::fmt::Error> {
+        let mut result = String::new();
+        for i in 0..self.nodenum {
+            let node = self.entries[i as usize];
+            if let FLW1Entry::Text(text) = node {
+                if text.textid == id {
+                    self.write_flow(i, node, &mut result, converted)?;
+                    break;
+                }
+            }
+        }
+        Ok(result)
+    }
+    pub(self) fn write_flow(&self, id: u16, node: FLW1Entry, result: &mut String, converted: &mut Vec<bool>) -> std::fmt::Result {
+        if converted[id as usize] {
+            return Ok(());
+        }
+        converted[id as usize] = true;
+        write!(result, "[node:{id}][type:")?;
+        match node {
+            FLW1Entry::Text(text) => {
+                let mid = text.textid;
+                write!(result, "text][messageid:{mid}][next:")?;
+                if text.nexttextid == u16::MAX {
+                    writeln!(result, "none]")?;
+                } else {
+                    let next = text.nexttextid;
+                    writeln!(result, "{next}]")?;
+                    let next_node = self.entries[next as usize];
+                    self.write_flow(next, next_node, result, converted)?;
+                }
+            },
+            FLW1Entry::Condition(con) => {
+                write!(result, "condition][type:{}]", con.get_con_type())?;
+                if con.conditiontype == 0 {
+                    write!(result, "[choice:{}]", con.get_choice())?;
+                } else {
+                    write!(result, "[arg:{}]", con.arg)?;
+                }
+                write!(result, "[trueflow:")?;
+                let true_id = self.branch_nodes[con.branchnodeid as usize];
+                if true_id == u16::MAX {
+                    write!(result, "none]")?;
+                } else {
+                    write!(result, "{true_id}]")?;
+                }
+                write!(result, "[falseflow:")?;
+                let false_id = self.branch_nodes[con.branchnodeid as usize + 1];
+                if false_id == u16::MAX {
+                    write!(result, "none]")?;
+                } else {
+                    write!(result, "{false_id}]")?;
+                }
+                writeln!(result)?;
+                if (0..self.nodenum).contains(&true_id) {
+                    let true_node = self.entries[true_id as usize];
+                    self.write_flow(true_id, true_node, result, converted)?;
+                }
+                if (0..self.nodenum).contains(&false_id) {
+                    let false_node = self.entries[false_id as usize];
+                    self.write_flow(false_id, false_node, result, converted)?;
+                }
+            },
+            FLW1Entry::Event(eve) => {
+                write!(result, "event][type:{}]", eve.get_event_type())?;
+                write!(result, "[arg:{}][next:", eve.arg)?;
+                let next = eve.branchnodeid;
+                if next == u16::MAX {
+                    writeln!(result, "none]")?;
+                } else {
+                    writeln!(result, "{next}]")?;
+                }
+                if (0..self.nodenum).contains(&next) {
+                    let next_node = self.entries[next as usize];
+                    self.write_flow(next, next_node, result, converted)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
